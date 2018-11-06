@@ -208,6 +208,18 @@ static inline struct vxlan_rdst *first_remote_rtnl(struct vxlan_fdb *fdb)
 	return list_first_entry(&fdb->remotes, struct vxlan_rdst, list);
 }
 
+static int vxlan_is_in_l3mdev_chain(struct net_device *chain,
+				    struct net_device *dev)
+{
+	if (!chain)
+		return 0;
+
+	if (chain->ifindex == dev->ifindex)
+		return 1;
+	return vxlan_is_in_l3mdev_chain(netdev_master_upper_dev_get(chain),
+					dev);
+}
+
 static int vxlan_get_l3mdev(struct net *net, int ifindex)
 {
 	struct net_device *dev;
@@ -3731,6 +3743,33 @@ struct net_device *vxlan_dev_create(struct net *net, const char *name,
 }
 EXPORT_SYMBOL_GPL(vxlan_dev_create);
 
+static int vxlan_reopen(struct vxlan_net *vn, struct vxlan_dev *vxlan)
+{
+	int ret = 0;
+
+	if (vxlan_addr_multicast(&vxlan->default_dst.remote_ip) &&
+	    !vxlan_group_used(vn, vxlan))
+		ret = vxlan_igmp_leave(vxlan);
+	vxlan_sock_release(vxlan);
+
+	if (ret < 0)
+		return ret;
+
+	ret = vxlan_sock_add(vxlan);
+	if (ret < 0)
+		return ret;
+
+	if (vxlan_addr_multicast(&vxlan->default_dst.remote_ip)) {
+		ret = vxlan_igmp_join(vxlan);
+		if (ret == -EADDRINUSE)
+			ret = 0;
+		if (ret)
+			vxlan_sock_release(vxlan);
+	}
+
+	return ret;
+}
+
 static void vxlan_handle_lowerdev_unregister(struct vxlan_net *vn,
 					     struct net_device *dev)
 {
@@ -3753,6 +3792,52 @@ static void vxlan_handle_lowerdev_unregister(struct vxlan_net *vn,
 	unregister_netdevice_many(&list_kill);
 }
 
+static void vxlan_handle_change_upper(struct vxlan_net *vn,
+				      struct net_device *dev)
+{
+	struct vxlan_dev *vxlan, *next;
+
+	list_for_each_entry_safe(vxlan, next, &vn->vxlan_list, next) {
+		struct net_device *lower;
+		int err;
+
+		lower = __dev_get_by_index(vxlan->net,
+					   vxlan->cfg.remote_ifindex);
+		if (!vxlan_is_in_l3mdev_chain(lower, dev))
+			continue;
+
+		err = vxlan_reopen(vn, vxlan);
+		if (err < 0)
+			netdev_err(vxlan->dev, "Failed to reopen socket: %d\n",
+				   err);
+	}
+}
+
+static void vxlan_handle_change(struct vxlan_net *vn, struct net_device *dev)
+{
+	struct vxlan_dev *vxlan = netdev_priv(dev);
+	struct vxlan_sock *sock;
+	int l3mdev_index;
+
+#if IS_ENABLED(CONFIG_IPV6)
+	bool metadata = vxlan->cfg.flags & VXLAN_F_COLLECT_METADATA;
+	bool ipv6 = vxlan->cfg.flags & VXLAN_F_IPV6 || metadata;
+#else
+	bool ipv6 = false;
+#endif
+
+	l3mdev_index = vxlan_get_l3mdev(vxlan->net, vxlan->cfg.remote_ifindex);
+
+	sock = ipv6 ? rcu_dereference(vxlan->vn6_sock)
+		    : rcu_dereference(vxlan->vn4_sock);
+	if (sock->sock->sk->sk_bound_dev_if != l3mdev_index) {
+		int ret = vxlan_reopen(vn, vxlan);
+		if (ret < 0)
+			netdev_err(vxlan->dev, "Failed to reopen socket: %d\n",
+				   ret);
+	}
+}
+
 static int vxlan_netdevice_event(struct notifier_block *unused,
 				 unsigned long event, void *ptr)
 {
@@ -3767,6 +3852,12 @@ static int vxlan_netdevice_event(struct notifier_block *unused,
 	} else if (event == NETDEV_UDP_TUNNEL_PUSH_INFO ||
 		   event == NETDEV_UDP_TUNNEL_DROP_INFO) {
 		vxlan_offload_rx_ports(dev, event == NETDEV_UDP_TUNNEL_PUSH_INFO);
+	} else if (event == NETDEV_CHANGEUPPER) {
+		vxlan_handle_change_upper(vn, dev);
+	} else if (event == NETDEV_CHANGE) {
+		if (dev->rtnl_link_ops &&
+		    !strcmp(dev->rtnl_link_ops->kind, vxlan_link_ops.kind))
+			vxlan_handle_change(vn, dev);
 	}
 
 	return NOTIFY_DONE;
