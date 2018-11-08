@@ -1,0 +1,31 @@
+pipeline:
+  config:
+    image: tuetuopay/kbuild
+    commands:
+      - 'make defconfig'
+      - 'echo CONFIG_NET_UDP_TUNNEL=m >> .config'
+      - 'echo CONFIG_VXLAN=m >> .config'
+      - 'make olddefconfig'
+
+  build:
+    image: tuetuopay/kbuild
+    commands:
+      - make -j10 net/ipv4/udp_tunnel.ko
+      - make -j10 net/ipv6/ip6_udp_tunnel.ko
+      - make -j10 drivers/net/vxlan.ko
+
+  test:
+    image: tuetuopay/kbuild
+    commands:
+      - '[ -f net/ipv4/udp_tunnel.ko ]'
+      - '[ -f net/ipv6/ip6_udp_tunnel.ko ]'
+      - '[ -f drivers/net/vxlan.ko ]'
+
+  notify:
+    image: appleboy/drone-telegram
+    secrets: [ TELEGRAM_TOKEN, PLUGIN_TO ]
+    when:
+      status: [ success, failure ]
+    message: |
+      ${DRONE_COMMIT_MESSAGE} {{ build.status }}
+      (${DRONE_BUILD_LINK})
