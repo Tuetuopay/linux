@@ -208,11 +208,23 @@ static inline struct vxlan_rdst *first_remote_rtnl(struct vxlan_fdb *fdb)
 	return list_first_entry(&fdb->remotes, struct vxlan_rdst, list);
 }
 
+static int vxlan_get_l3mdev(struct net *net, int ifindex)
+{
+	struct net_device *dev;
+
+	dev = __dev_get_by_index(net, ifindex);
+	while (dev && !netif_is_l3_master(dev))
+		dev = netdev_master_upper_dev_get(dev);
+
+	return dev ? dev->ifindex : 0;
+}
+
 /* Find VXLAN socket based on network namespace, address family and UDP port
  * and enabled unshareable flags.
  */
 static struct vxlan_sock *vxlan_find_sock(struct net *net, sa_family_t family,
-					  __be16 port, u32 flags)
+					  __be16 port, u32 flags,
+					  int l3mdev_ifindex)
 {
 	struct vxlan_sock *vs;
 
@@ -221,7 +233,8 @@ static struct vxlan_sock *vxlan_find_sock(struct net *net, sa_family_t family,
 	hlist_for_each_entry_rcu(vs, vs_head(net, port), hlist) {
 		if (inet_sk(vs->sock->sk)->inet_sport == port &&
 		    vxlan_get_sk_family(vs) == family &&
-		    vs->flags == flags)
+		    vs->flags == flags &&
+		    vs->sock->sk->sk_bound_dev_if == l3mdev_ifindex)
 			return vs;
 	}
 	return NULL;
@@ -261,7 +274,7 @@ static struct vxlan_dev *vxlan_find_vni(struct net *net, int ifindex,
 {
 	struct vxlan_sock *vs;
 
-	vs = vxlan_find_sock(net, family, port, flags);
+	vs = vxlan_find_sock(net, family, port, flags, ifindex);
 	if (!vs)
 		return NULL;
 
@@ -2172,6 +2185,9 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 		struct rtable *rt;
 		__be16 df = 0;
 
+		if (!ifindex)
+			ifindex = sock4->sock->sk->sk_bound_dev_if;
+
 		rt = vxlan_get_route(vxlan, dev, sock4, skb, ifindex, tos,
 				     dst->sin.sin_addr.s_addr,
 				     &local_ip.sin.sin_addr.s_addr,
@@ -2209,6 +2225,9 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 #if IS_ENABLED(CONFIG_IPV6)
 	} else {
 		struct vxlan_sock *sock6 = rcu_dereference(vxlan->vn6_sock);
+
+		if (!ifindex)
+			ifindex = sock6->sock->sk->sk_bound_dev_if;
 
 		ndst = vxlan6_get_route(vxlan, dev, sock6, skb, ifindex, tos,
 					label, &dst->sin6.sin6_addr,
@@ -2813,7 +2832,8 @@ static const struct ethtool_ops vxlan_ethtool_ops = {
 };
 
 static struct socket *vxlan_create_sock(struct net *net, bool ipv6,
-					__be16 port, u32 flags)
+					__be16 port, u32 flags,
+					int l3mdev_ifindex)
 {
 	struct socket *sock;
 	struct udp_port_cfg udp_conf;
@@ -2831,6 +2851,7 @@ static struct socket *vxlan_create_sock(struct net *net, bool ipv6,
 	}
 
 	udp_conf.local_udp_port = port;
+	udp_conf.bind_ifindex = l3mdev_ifindex;
 
 	/* Open UDP socket */
 	err = udp_sock_create(net, &udp_conf, &sock);
@@ -2842,7 +2863,8 @@ static struct socket *vxlan_create_sock(struct net *net, bool ipv6,
 
 /* Create new listen socket if needed */
 static struct vxlan_sock *vxlan_socket_create(struct net *net, bool ipv6,
-					      __be16 port, u32 flags)
+					      __be16 port, u32 flags,
+					      int l3mdev_ifindex)
 {
 	struct vxlan_net *vn = net_generic(net, vxlan_net_id);
 	struct vxlan_sock *vs;
@@ -2857,7 +2879,7 @@ static struct vxlan_sock *vxlan_socket_create(struct net *net, bool ipv6,
 	for (h = 0; h < VNI_HASH_SIZE; ++h)
 		INIT_HLIST_HEAD(&vs->vni_list[h]);
 
-	sock = vxlan_create_sock(net, ipv6, port, flags);
+	sock = vxlan_create_sock(net, ipv6, port, flags, l3mdev_ifindex);
 	if (IS_ERR(sock)) {
 		kfree(vs);
 		return ERR_CAST(sock);
@@ -2894,11 +2916,15 @@ static int __vxlan_sock_add(struct vxlan_dev *vxlan, bool ipv6)
 	struct vxlan_net *vn = net_generic(vxlan->net, vxlan_net_id);
 	struct vxlan_sock *vs = NULL;
 	struct vxlan_dev_node *node;
+	int l3mdev_index;
+
+	l3mdev_index = vxlan_get_l3mdev(vxlan->net, vxlan->cfg.remote_ifindex);
 
 	if (!vxlan->cfg.no_share) {
 		spin_lock(&vn->sock_lock);
 		vs = vxlan_find_sock(vxlan->net, ipv6 ? AF_INET6 : AF_INET,
-				     vxlan->cfg.dst_port, vxlan->cfg.flags);
+				     vxlan->cfg.dst_port, vxlan->cfg.flags,
+				     l3mdev_index);
 		if (vs && !refcount_inc_not_zero(&vs->refcnt)) {
 			spin_unlock(&vn->sock_lock);
 			return -EBUSY;
@@ -2907,7 +2933,8 @@ static int __vxlan_sock_add(struct vxlan_dev *vxlan, bool ipv6)
 	}
 	if (!vs)
 		vs = vxlan_socket_create(vxlan->net, ipv6,
-					 vxlan->cfg.dst_port, vxlan->cfg.flags);
+					 vxlan->cfg.dst_port, vxlan->cfg.flags,
+					 l3mdev_index);
 	if (IS_ERR(vs))
 		return PTR_ERR(vs);
 #if IS_ENABLED(CONFIG_IPV6)
