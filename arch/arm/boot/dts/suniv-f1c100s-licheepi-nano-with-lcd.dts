@@ -45,3 +45,11 @@
 		remote-endpoint = <&panel_input>;
 	};
 };
+
+&cedarx {
+	status = "okay";
+};
+
+&ion {
+	status = "okay";
+};
