@@ -69,6 +69,20 @@
 					status = "disabled";
 				};
 			};
+
+			sram_c: sram@1d00000 {
+				compatible = "mmio-sram";
+				reg = <0x01d00000 0x80000>;
+				#address-cells = <1>;
+				#size-cells = <1>;
+				ranges = <0 0x01d00000 0x80000>;
+
+				ve_sram: sram-section@0 {
+					compatible = "allwinner,suniv-f1c100s-sram-c",
+							 "allwinner,sun4i-a10-sram-c1";
+					reg = <0x000000 0x80000>;
+				};
+			};
 		};
 
 		spi0: spi@1c05000 {
@@ -385,6 +399,32 @@
 						remote-endpoint = <&tcon0_in_be0>;
 					};
 				};
+			};
+		};
+
+		cedarx: video-codec@1c0e000 {
+			compatible = "allwinner,suniv-f1c100s-cedar";
+			reg = <0x01c0e000 0x1000>;
+			clocks = <&ccu CLK_BUS_VE>, <&ccu CLK_VE>, <&ccu CLK_DRAM_VE>;
+			clock-names = "ahb", "mod", "ram";
+			resets = <&ccu RST_BUS_VE>;
+			interrupts = <34>;
+			allwinner,sram = <&ve_sram 1>;
+
+			status = "disabled";
+		};
+
+		ion: ion {
+			compatible = "allwinner,sunxi-ion";
+			status = "diabled";
+
+			heap_sma@0 {
+				compatible = "allwinner,cma";
+				heap-name = "cma";
+				heap-id = <0x4>;
+				heap-base = <0x0>;
+				heap-size = <0x0>;
+				heap-type = "ion_cma";
 			};
 		};
 	};
