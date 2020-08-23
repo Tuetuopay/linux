@@ -74,3 +74,11 @@
 		};
 	};
 };
+
+&cedarx {
+	status = "okay";
+};
+
+&ion {
+	status = "okay";
+};
