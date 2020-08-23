@@ -1,0 +1,76 @@
+/*
+ * Copyright (C) 2020 Tuetuopay <tuetuopay@me.com>
+ *
+ * SPDX-License-Identifier: (GPL-2.0+ OR X11)
+ */
+
+#include "suniv-f1c100s-licheepi-nano.dts"
+
+/ {
+	model = "Lichee Pi Nano on Licheedmi";
+};
+
+&pio {
+	lcd_rgb565_pins: lcd-rgb565-pins {
+		pins = "PD1", "PD2", "PD3", "PD4",
+		       "PD5", "PD6", "PD7", "PD8", "PD9",
+		       "PD10", "PD11", "PD13", "PD14",
+		       "PD15", "PD16", "PD17", "PD18", "PD19",
+		       "PD20", "PD21";
+		function = "lcd";
+	};
+
+	i2c0_pins_pd: i2c0-pins-pd {
+		pins = "PD0", "PD12";
+		function = "i2c0";
+	};
+};
+
+&be0 {
+	status = "okay";
+};
+
+&de {
+	status = "okay";
+};
+
+&tcon0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&lcd_rgb565_pins>;
+	status = "okay";
+};
+
+&tcon0_out {
+	tcon0_out_hdmi: endpoint@0 {
+		reg = <0>;
+		remote-endpoint = <&sii9022_in>;
+	};
+};
+
+&i2c0 {
+	pinctrl-0 = <&i2c0_pins_pd>;
+
+	status = "okay";
+
+	hdmi-transmitter@39 {
+		compatible = "sil,sii9022";
+		reg = <0x39>;
+		reset-gpios = <&pio 0 1 GPIO_ACTIVE_LOW>; /* PA1 */
+
+		#sound-dai-cells = <0>;
+
+		status = "okay";
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				sii9022_in: endpoint {
+					remote-endpoint = <&tcon0_out_hdmi>;
+				};
+			};
+		};
+	};
+};
