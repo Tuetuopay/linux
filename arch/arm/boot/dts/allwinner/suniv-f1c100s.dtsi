@@ -108,8 +108,8 @@
 			compatible = "allwinner,suniv-f1c100s-tcon";
 			reg = <0x01c0c000 0x1000>;
 			interrupts = <29>;
-			clocks = <&ccu CLK_BUS_LCD>, <&ccu CLK_TCON>;
-			clock-names = "ahb", "tcon-ch0";
+			clocks = <&ccu CLK_BUS_LCD>, <&ccu CLK_TCON>, <&ccu CLK_TCON>;
+			clock-names = "ahb", "tcon-ch0", "tcon-ch1";
 			clock-output-names = "tcon-pixel-clock";
 			resets = <&ccu RST_BUS_LCD>;
 			reset-names = "lcd";
