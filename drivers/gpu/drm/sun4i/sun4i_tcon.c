@@ -1453,6 +1453,7 @@ static const struct sun4i_tcon_quirks suniv_f1c100s_quirks = {
 	 */
 	.has_channel_0		= true,
 	/* .has_channel_1	= true, */
+	.dclk_min_div		= 1,
 };
 
 static const struct sun4i_tcon_quirks sun4i_a10_quirks = {
