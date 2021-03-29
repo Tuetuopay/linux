@@ -262,6 +262,32 @@ static const struct sun4i_i2s_clk_div sun8i_i2s_clk_div[] = {
 	{ .div = 192, .val = 15 },
 };
 
+static const struct sun4i_i2s_clk_div suniv_i2s_bclk_div[] = {
+	{ .div = 2, .val = 0 },
+	{ .div = 4, .val = 1 },
+	{ .div = 6, .val = 2 },
+	{ .div = 8, .val = 3 },
+	{ .div = 12, .val = 4 },
+	{ .div = 16, .val = 5 },
+	{ .div = 32, .val = 6 },
+	{ .div = 64, .val = 7 },
+	/* TODO - extend divide ratio supported by newer SoCs */
+};
+
+static const struct sun4i_i2s_clk_div suniv_i2s_mclk_div[] = {
+	{ .div = 1, .val = 0 },
+	{ .div = 2, .val = 1 },
+	{ .div = 4, .val = 2 },
+	{ .div = 6, .val = 3 },
+	{ .div = 8, .val = 4 },
+	{ .div = 12, .val = 5 },
+	{ .div = 16, .val = 6 },
+	{ .div = 24, .val = 7 },
+	{ .div = 32, .val = 8 },
+	{ .div = 48, .val = 9 },
+	{ .div = 64, .val = 10 },
+	/* TODO - extend divide ratio supported by newer SoCs */
+};
 static unsigned long sun4i_i2s_get_bclk_parent_rate(const struct sun4i_i2s *i2s)
 {
 	return i2s->mclk_freq;
@@ -450,6 +476,7 @@ static int sun4i_i2s_set_chan_cfg(const struct sun4i_i2s *i2s,
 				  unsigned int slot_width)
 {
 	/* Map the channels for playback and capture */
+	// TODO quirk for F1C100s? (top 16 bits are N/A on this soc)
 	regmap_write(i2s->regmap, SUN4I_I2S_TX_CHAN_MAP_REG, 0x76543210);
 	regmap_write(i2s->regmap, SUN4I_I2S_RX_CHAN_MAP_REG, 0x00003210);
 
@@ -1436,6 +1463,26 @@ static const struct sun4i_i2s_quirks sun50i_h6_i2s_quirks = {
 	.set_fmt		= sun50i_h6_i2s_set_soc_fmt,
 };
 
+static const struct sun4i_i2s_quirks suniv_f1c100s_i2s_quirks = {
+	// no frigging idea. based off the fact codec has the reset on f1c100s
+	// and plain sun4i has not
+	.has_reset		= true,
+	.reg_offset_txdata	= SUN4I_I2S_FIFO_TX_REG,
+	// may need a custom one, default value for bits [31:16] of
+	// SUN4I_I2S_TX_CHAN_MAP_REG are all zero on f1c100s
+	.sun4i_i2s_regmap	= &sun4i_i2s_regmap_config,
+	.field_clkdiv_mclk_en	= REG_FIELD(SUN4I_I2S_CLK_DIV_REG, 7, 7),
+	.bclk_dividers		= suniv_i2s_bclk_div,
+	.num_bclk_dividers	= ARRAY_SIZE(suniv_i2s_bclk_div),
+	.mclk_dividers		= suniv_i2s_mclk_div,
+	.num_mclk_dividers	= ARRAY_SIZE(suniv_i2s_mclk_div),
+	.get_bclk_parent_rate	= sun4i_i2s_get_bclk_parent_rate, // ???
+	.get_sr			= sun4i_i2s_get_sr,
+	.get_wss		= sun4i_i2s_get_wss,
+	.set_chan_cfg		= sun4i_i2s_set_chan_cfg,
+	.set_fmt		= sun4i_i2s_set_soc_fmt,
+};
+
 static int sun4i_i2s_init_regmap_fields(struct device *dev,
 					struct sun4i_i2s *i2s)
 {
@@ -1608,6 +1655,10 @@ static const struct of_device_id sun4i_i2s_match[] = {
 	{
 		.compatible = "allwinner,sun50i-h6-i2s",
 		.data = &sun50i_h6_i2s_quirks,
+	},
+	{
+		.compatible = "allwinner,suniv-f1c100s-i2s",
+		.data = &suniv_f1c100s_i2s_quirks,
 	},
 	{}
 };

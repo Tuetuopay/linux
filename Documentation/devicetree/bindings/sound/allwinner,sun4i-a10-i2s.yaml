@@ -25,6 +25,7 @@ properties:
           - const: allwinner,sun50i-a64-i2s
           - const: allwinner,sun8i-h3-i2s
       - const: allwinner,sun50i-h6-i2s
+      - const: allwinner,suniv-f1c100s-i2s
 
   reg:
     maxItems: 1
@@ -61,6 +62,7 @@ allOf:
               - allwinner,sun8i-h3-i2s
               - allwinner,sun50i-a64-codec-i2s
               - allwinner,sun50i-h6-i2s
+              - allwinner,suniv-f1c100s-i2s
 
     then:
       required:
