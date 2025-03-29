@@ -175,6 +175,9 @@ struct sun4i_i2s_quirks {
 	struct reg_field		field_fmt_wss;
 	struct reg_field		field_fmt_sr;
 
+	u32				playback_dma_maxburst;
+	u32				capture_dma_maxburst;
+
 	const struct sun4i_i2s_clk_div	*bclk_dividers;
 	unsigned int			num_bclk_dividers;
 	const struct sun4i_i2s_clk_div	*mclk_dividers;
@@ -1464,14 +1467,12 @@ static const struct sun4i_i2s_quirks sun50i_h6_i2s_quirks = {
 };
 
 static const struct sun4i_i2s_quirks suniv_f1c100s_i2s_quirks = {
-	// no frigging idea. based off the fact codec has the reset on f1c100s
-	// and plain sun4i has not
 	.has_reset		= true,
 	.reg_offset_txdata	= SUN4I_I2S_FIFO_TX_REG,
-	// may need a custom one, default value for bits [31:16] of
-	// SUN4I_I2S_TX_CHAN_MAP_REG are all zero on f1c100s
 	.sun4i_i2s_regmap	= &sun4i_i2s_regmap_config,
 	.field_clkdiv_mclk_en	= REG_FIELD(SUN4I_I2S_CLK_DIV_REG, 7, 7),
+	.field_fmt_wss		= REG_FIELD(SUN4I_I2S_FMT0_REG, 2, 3),
+	.field_fmt_sr		= REG_FIELD(SUN4I_I2S_FMT0_REG, 4, 5),
 	.bclk_dividers		= suniv_i2s_bclk_div,
 	.num_bclk_dividers	= ARRAY_SIZE(suniv_i2s_bclk_div),
 	.mclk_dividers		= suniv_i2s_mclk_div,
@@ -1481,6 +1482,8 @@ static const struct sun4i_i2s_quirks suniv_f1c100s_i2s_quirks = {
 	.get_wss		= sun4i_i2s_get_wss,
 	.set_chan_cfg		= sun4i_i2s_set_chan_cfg,
 	.set_fmt		= sun4i_i2s_set_soc_fmt,
+	.playback_dma_maxburst	= 4,
+	.capture_dma_maxburst	= 4,
 };
 
 static int sun4i_i2s_init_regmap_fields(struct device *dev,
@@ -1572,10 +1575,12 @@ static int sun4i_i2s_probe(struct platform_device *pdev)
 
 	i2s->playback_dma_data.addr = res->start +
 					i2s->variant->reg_offset_txdata;
-	i2s->playback_dma_data.maxburst = 8;
+	i2s->playback_dma_data.maxburst =
+		i2s->variant->playback_dma_maxburst ?: 8;
 
 	i2s->capture_dma_data.addr = res->start + SUN4I_I2S_FIFO_RX_REG;
-	i2s->capture_dma_data.maxburst = 8;
+	i2s->capture_dma_data.maxburst =
+		i2s->variant->capture_dma_maxburst ?: 8;
 
 	pm_runtime_enable(&pdev->dev);
 	if (!pm_runtime_enabled(&pdev->dev)) {
