@@ -55,7 +55,7 @@
 			"Right DAC", "DACR";
 		status = "disabled";
 
-		simple-audio-card,cpu {
+		dai_link_master: simple-audio-card,cpu {
 			sound-dai = <&i2s0>;
 		};
 
@@ -122,15 +122,15 @@
 
 		i2s0: i2s@1c22000 {
 			compatible = "allwinner,suniv-f1c100s-i2s";
-			reg = <0x01c22000 0x1000>;
-			interrupts = <16>;
+			reg = <0x01c22000 0x400>;
+			interrupts = <35>;
 			clocks = <&ccu CLK_BUS_I2S0>, <&ccu CLK_I2S>;
 			clock-names = "apb", "mod";
 			resets = <&ccu RST_BUS_I2S0>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&i2s_pa_pins>;
-			dmas = <&dma SUN4I_DMA_NORMAL 3>,
-			       <&dma SUN4I_DMA_NORMAL 3>;
+			dmas = <&dma SUN4I_DMA_NORMAL 14>,
+			       <&dma SUN4I_DMA_NORMAL 14>;
 			dma-names = "rx", "tx";
 			#sound-dai-cells = <0>;
 			status = "disabled";
@@ -231,7 +231,7 @@
 
 		dma: dma-controller@1c02000 {
 			compatible = "allwinner,suniv-f1c100s-dma";
-			reg = <0x01c02000 0x1000>;
+			reg = <0x01c02000 0x400>;
 			interrupts = <18>;
 			clocks = <&ccu CLK_BUS_DMA>;
 			resets = <&ccu RST_BUS_DMA>;
