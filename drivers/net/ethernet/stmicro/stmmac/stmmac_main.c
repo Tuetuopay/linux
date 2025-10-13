@@ -154,6 +154,7 @@ static void stmmac_exit_fs(struct net_device *dev);
 #define RTL_8211E_PHY_ID  0x001cc915
 #define RTL_8211F_PHY_ID  0x001cc916
 #define DP_83848_PHY_ID   0x20005c90
+#define YT_8531C_PHY_ID   0x4f51e91b
 #endif
 
 int stmmac_bus_clks_config(struct stmmac_priv *priv, bool enabled)
@@ -7228,8 +7229,8 @@ static int stmmac_hw_init(struct stmmac_priv *priv)
 		 * register (if supported).
 		 */
 		priv->plat->enh_desc = priv->dma_cap.enh_desc;
-		priv->plat->pmt = priv->dma_cap.pmt_remote_wake_up &&
-				!(priv->plat->flags & STMMAC_FLAG_USE_PHY_WOL);
+		priv->plat->pmt = 0;//priv->dma_cap.pmt_remote_wake_up &&
+				//!(priv->plat->flags & STMMAC_FLAG_USE_PHY_WOL);
 		priv->hw->pmt = priv->plat->pmt;
 		if (priv->dma_cap.hash_tb_sz) {
 			priv->hw->multicast_filter_bins =
@@ -7629,24 +7630,22 @@ static int phy_rtl8211e_led_fixup(struct phy_device *phydev)
 
 static int phy_rtl8211f_led_fixup(struct phy_device *phydev)
 {
-	int val;
+       /*switch to extension page31*/
+       phy_write(phydev, 31, 0xd04);
+       /*set led1(yellow) act*/
+       phy_write(phydev, 16, 0xa200);
+       /*switch back to page0*/
+       phy_write(phydev,31,0xa42);
+       return 0;
+}
 
-	printk("%s in\n", __func__);
-
-	val = phy_read(phydev, 31);
-	printk("%s in  val=0x%04x\n", __func__, val);
-	
-	/*switch to extension page31*/
-	phy_write(phydev, 31, 0xd04);
-
-	//phy_write(phydev, 0x10, 0x6d60);   /*led1-green led2-yellow */
-	phy_write(phydev, 0x10, 0xc160);   /*led1-green led2-yellow */
-	phy_write(phydev, 0x11, 0x8);  
-
-	/*switch back to page0*/
-	phy_write(phydev,31,0x0);
-
-	return 0;
+static int phy_yt8531_led_fixup(struct phy_device *phydev)
+{
+	   phy_write(phydev, 0x1e, 0xA00D);//?ï¿½ï¿½Dï¿½ï¿½ï¿??ï¿½ï¿½led1
+	   phy_write(phydev, 0x1f, 0x0026);//?ï¿½ï¿½Dï¿½ä¨ºy?Y
+	   phy_write(phydev, 0x1e, 0xA00E);//?ï¿½ï¿½Dï¿½ï¿½ï¿??ï¿½ï¿½led2
+	   phy_write(phydev, 0x1f, 0x00D8);//?ï¿½ï¿½Dï¿½ä¨ºy?Y
+       return 0;
 }
 #endif
 
@@ -7961,6 +7960,9 @@ ret = phy_register_fixup_for_uid(RTL_8201F_PHY_ID, 0xffffffff, phy_rtl8201f_led_
 if (ret)
 	pr_warn("Cannot register PHY board fixup.\n");
 ret = phy_register_fixup_for_uid(DP_83848_PHY_ID, 0xffffffff, phy_dp83848_led_fixup);
+if (ret)
+	pr_warn("Cannot register PHY board fixup.\n");
+ret = phy_register_fixup_for_uid(YT_8531C_PHY_ID, 0xffffffff, phy_yt8531_led_fixup);
 if (ret)
 	pr_warn("Cannot register PHY board fixup.\n");
 #endif
