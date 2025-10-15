@@ -192,6 +192,10 @@ dtb-$(CONFIG_ARCH_ROCKCHIP) += \
 	rk3503g-evb1-v10.dtb \
 	rk3506b-evb1-v10.dtb \
 	rk3506b-test2-v10.dtb \
+	rk3506b-cp2b-v10.dtb \
+	rk3506b-cp2b-uboot.dtb \
+	rk3506b-cp2b-p-v10.dtb \
+	rk3506b-cp2b-p-uboot.dtb \
 	rk3506g-demo-display-control.dtb \
 	rk3506g-evb1-v10.dtb \
 	rk3506g-evb1-v10-amp.dtb \
