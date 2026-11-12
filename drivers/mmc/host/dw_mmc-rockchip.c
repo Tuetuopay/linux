@@ -354,7 +354,7 @@ static int dw_mci_rk3288_execute_tuning(struct dw_mci_slot *slot, u32 opcode)
 	int middle_phase;
 	int phase;
 
-	if (IS_ERR(priv->sample_clk)) {
+	if (IS_ERR(priv->sample_clk) && !priv->internal_phase) {
 		dev_err(host->dev, "Tuning clock (sample_clk) not defined.\n");
 		return -EIO;
 	}
